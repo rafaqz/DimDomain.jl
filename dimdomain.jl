@@ -11,15 +11,23 @@ DimDomain(dims::Tuple{Vararg{<:Dimension}}) = begin
     DimDomain(dimcolumns)
 end
 
-columns(dom::DimDomain) = dom.columns
+dimcolumns(dom::DimDomain) = dom.dimcolumns
 
 GeoStatsBase.nelms(dom::DimDomain) = prod(map(length, dims(dom)))
+
 GeoStatsBase.ncoords(dom::DimDomain{Tuple{Vararg{<Dimension,N}}}) where N = N
+
 GeoStatsBase.coordtype(dom::DimDomain) = eltype(first(dims(dom)))
-GeoStatsBase.coordinates!(buf, dom::DimDomain, i::Int) = map(c -> c[i], columns(dom))
+
+GeoStatsBase.coordinates!(buf, dom::DimDomain, i::Int) = 
+    map(c -> c[i], dimcolumns(dom))
 
 
 #= Discussion point: the domain is nearly identical to the table: 
+
+struct DimDomain{C} <: AbstractDomain
+    dimcolumns::C
+end
 
 struct DimTable{Keys,A,C} <: Tables.AbstractColumns 
     array::A
