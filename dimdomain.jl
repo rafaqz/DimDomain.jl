@@ -2,22 +2,25 @@
 
 using DimensionalData, GeoStatsBase
 
+using DimensionalData: DimColumn
+
 
 struct DimDomain{C} <: AbstractDomain
     dimcolumns::C
 end
-DimDomain(dims::Tuple{Vararg{<:Dimension}}) = begin
+DimDomain(dom::Tuple{Vararg{<:Dimension}}) = begin
     dimcolumns = map(d -> DimColumn(d, dims), dims)
-    DimDomain(dimcolumns)
+    DimDomain(dimcolumns) 
 end
-
 dimcolumns(dom::DimDomain) = dom.dimcolumns
+# This syntax should be fixed in DD for DimColumn
+dims(dom::DimDomain) = map(DimensionalData.dim, dimcolumns(dom))  
 
-GeoStatsBase.nelms(dom::DimDomain) = prod(map(length, dims(dom)))
+GeoStatsBase.nelms(dom::DimDomain) = length(first(dimcolumns))
 
-GeoStatsBase.ncoords(dom::DimDomain{Tuple{Vararg{<Dimension,N}}}) where N = N
+GeoStatsBase.ncoords(dom::DimDomain{Tuple{Vararg{<:DimColumn,N}}}) where N = N
 
-GeoStatsBase.coordtype(dom::DimDomain) = eltype(first(dims(dom)))
+GeoStatsBase.coordtype(dom::DimDomain) = eltype(first(dimcolumns(dom)))
 
 GeoStatsBase.coordinates!(buf, dom::DimDomain, i::Int) = 
     map(c -> c[i], dimcolumns(dom))
