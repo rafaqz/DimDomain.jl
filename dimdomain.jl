@@ -1,6 +1,6 @@
 
-using DimensionalData, GeoStatsBase, GeoStats, Plots, 
-      DirectGaussianSimulation, Test, StaticArrays, LinearAlgebra
+using DimensionalData, GeoStatsBase, GeoStats, Plots, BenchmarkTools
+      DirectGaussianSimulation, Test, StaticArrays, LinearAlgebra, 
 
 using DimensionalData: DimColumn
 
@@ -50,7 +50,9 @@ rg = DimDomain(da)
 
 P = SimulationProblem(rg, :Z => Float64, 2)
 S  = DirectGaussSim(:Z=>(variogram=GaussianVariogram(range=30.0),))
-sol = solve(P, S)
+@btime sol = solve(P, S)
+# 17.760 ms (266 allocations: 11.06 MiB)
+
 plot(sol)
 
 # Define an identical but "Irregular" marked DimArray 
@@ -65,8 +67,11 @@ D = DimDomain(da)
 # It works jus the same
 P = SimulationProblem(D, :Z => Float64, 2)
 S  = DirectGaussSim(:Z=>(variogram=GaussianVariogram(range=30.0),))
-sol = solve(P, S)
-# But doesn't plot. This could just work using the interface?
+@btime sol = solve(P, S)
+# 19.930 ms (265 allocations: 11.06 MiB) - a little slower
+# but we are indexing into a vector
+
+# But it doesn't plot. This could "just work" using the interface?
 # plot(sol)
 
 
