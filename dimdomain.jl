@@ -67,8 +67,9 @@ Get the domain from any AbstractDimArray
 """
 GeoStatsBase.domain(A::AbstractDimArray) = GeoStatsBase.domain(dims(A))
 
-# There is a base method `values` that basically does the same thing as this
-GeoStatsBase.values(A::AbstractDimArray) = parent(A)
+# This table also has the dimension columns in it, because its a general
+# tables interface. It should still work? 
+GeoStatsBase.values(A::AbstractDimArray) = DimTable(A)
 
 
 
