@@ -99,7 +99,7 @@ end
 
 @testset "DimDomain is used if dims are irregular" begin
 
-    # Define an identical but "Irregular" DimArray (the default for a vector index 
+    # Define an identical but "Irregular" DimArray (the default for a vector index)
     da_i = DimArray(zeros(20, 30), (X([-19.0:2.0:19.0...]), Y([3.0:3.0:90.0...])))
 
     # Get the domain from it
@@ -114,7 +114,6 @@ end
     buffer = [SA[0.0, 0.0] for i in 1:20 * 30]
     @test GeoStatsBase.coordinates!(buffer, D, 4) == [-13.0, 3.0]
 
-    # Run the same problem, now with the 
     P = SimulationProblem(da_i, :Z => Float64, 2)
     S  = DirectGaussSim(:Z=>(variogram=GaussianVariogram(range=30.0),))
     sol = solve(P, S)
@@ -138,7 +137,6 @@ end
     buffer = [SA[0.0, 0.0] for i in 1:20 * 30]
     @test GeoStatsBase.coordinates!(buffer, da, 4) == [-13.0, 3.0]
 
-    # Run the same problem, now with the 
     P = SimulationProblem(da, :Z => Float64, 2)
     S  = DirectGaussSim(:Z=>(variogram=GaussianVariogram(range=30.0),))
     sol = solve(P, S)
