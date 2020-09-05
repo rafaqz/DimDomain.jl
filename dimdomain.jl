@@ -39,8 +39,7 @@ GeoStatsBase.coordinates!(buf::MArray, dom::DimDomain, i::Int) =
 Get the domain from a tuple of Dimension
 """
 GeoStatsBase.domain(dims::Tuple{Vararg{<:Dimension}}) = begin
-
-    # Here we check if this these dimensions are all regular
+# Here we check if this these dimensions are all regular
     isregular = map(dims) do d
         mode(d) isa Sampled && span(d) isa Regular
     end
@@ -68,6 +67,7 @@ Get the domain from any AbstractDimArray
 """
 GeoStatsBase.domain(A::AbstractDimArray) = GeoStatsBase.domain(dims(A))
 
+# There is a base method `values` that basically does the same thing as this
 GeoStatsBase.values(A::AbstractDimArray) = parent(A)
 
 
@@ -115,7 +115,7 @@ end
     @test GeoStatsBase.coordinates!(buffer, D, 4) == [-13.0, 3.0]
 
     # Run the same problem, now with the 
-    P = SimulationProblem(D, :Z => Float64, 2)
+    P = SimulationProblem(da_i, :Z => Float64, 2)
     S  = DirectGaussSim(:Z=>(variogram=GaussianVariogram(range=30.0),))
     sol = solve(P, S)
     # @btime 19.930 ms (265 allocations: 11.06 MiB) 
@@ -124,6 +124,26 @@ end
     # But it doesn't plot. This could "just work" using the interface?
     # plot(sol)
 end
+
+
+@testset "We can just use any `AbstractDimArray` directly as the domain" begin
+
+    # Define an identical but "Irregular" DimArray (the default for a vector index 
+    da = DimArray(zeros(20, 30), (X([-19.0:2.0:19.0...]), Y([3.0:3.0:90.0...])))
+
+    # Check the geostatsbase interface works
+    @test GeoStatsBase.nelms(da) == 20 * 30
+    @test GeoStatsBase.ncoords(da) == 2
+    @test GeoStatsBase.coordtype(da) == Float64
+    buffer = [SA[0.0, 0.0] for i in 1:20 * 30]
+    @test GeoStatsBase.coordinates!(buffer, da, 4) == [-13.0, 3.0]
+
+    # Run the same problem, now with the 
+    P = SimulationProblem(da, :Z => Float64, 2)
+    S  = DirectGaussSim(:Z=>(variogram=GaussianVariogram(range=30.0),))
+    sol = solve(P, S)
+end
+
 
 
 # TODO: test more things
