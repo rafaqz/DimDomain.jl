@@ -72,6 +72,10 @@ GeoStatsBase.domain(A::AbstractDimArray) = GeoStatsBase.domain(dims(A))
 GeoStatsBase.values(A::AbstractDimArray) = DimTable(A)
 
 
+# TODO: implement DimTable for GeoStack
+# This would give us multi-layered data object
+# the question is wether to put a simplified parent `DimStack` type in DD
+# So all of this doesn't need a GD dependency, just DD
 
 
 #########################################################################
