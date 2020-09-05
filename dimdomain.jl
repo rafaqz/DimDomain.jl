@@ -4,13 +4,42 @@ using DimensionalData, GeoStatsBase, GeoStats, Plots, BenchmarkTools
 
 using DimensionalData: DimColumn
 
-# Define a domain object that can use Array Dimensions
-# to generate coordinates
+
+"""
+    DimDomain{C} <: AbstractDomain
+
+A domain object that can uses a tuple of `Dimension`s to generate coordinates.
+"""
 struct DimDomain{C} <: AbstractDomain
     dimcolumns::C
 end
+dimcolumns(dom::DimDomain) = dom.dimcolumns
+# This syntax should be fixed in DD for DimColumn
+DimensionalData.dims(dom::DimDomain) = map(DimensionalData.dim, dimcolumns(dom))  
 
-getdomain(dims::Tuple{Vararg{<:Dimension}}) = begin
+
+# Domain interface
+
+GeoStatsBase.nelms(dom::DimDomain) = length(first(dimcolumns(dom)))
+GeoStatsBase.ncoords(dom::DimDomain) = length(dimcolumns(dom))
+GeoStatsBase.coordtype(dom::DimDomain) = eltype(first(dimcolumns(dom)))
+
+# Why do we need both of these methods?
+GeoStatsBase.coordinates!(buf::AbstractVector, dom::DimDomain, i::Int) = 
+    buf[i] = SA[map(c -> c[i], dimcolumns(dom))...]
+GeoStatsBase.coordinates!(buf::MArray, dom::DimDomain, i::Int) =
+    buf .= map(c -> c[i], dimcolumns(dom))
+
+
+
+# Data interface
+
+"""
+    domain(dims::Tuple{Vararg{<:Dimension}})
+
+Get the domain from a tuple of Dimension
+"""
+GeoStatsBase.domain(dims::Tuple{Vararg{<:Dimension}}) = begin
 
     # Here we check if this these dimensions are all regular
     isregular = map(dims) do d
@@ -32,25 +61,15 @@ getdomain(dims::Tuple{Vararg{<:Dimension}}) = begin
     end
 end
 
-# Allow getting the domain from any AbstractDimArray
-getdomain(A::AbstractDimArray) = DimDomain(dims(A))
 
+"""
+    domain(A::AbstractDimArray)
 
-dimcolumns(dom::DimDomain) = dom.dimcolumns
-# This syntax should be fixed in DD for DimColumn
-DimensionalData.dims(dom::DimDomain) = map(DimensionalData.dim, dimcolumns(dom))  
+Get the domain from any AbstractDimArray
+"""
+GeoStatsBase.domain(A::AbstractDimArray) = GeoStatsBase.domain(dims(A))
 
-
-# GeoStatsBase interface
-GeoStatsBase.nelms(dom::DimDomain) = length(first(dimcolumns(dom)))
-GeoStatsBase.ncoords(dom::DimDomain) = length(dimcolumns(dom))
-GeoStatsBase.coordtype(dom::DimDomain) = eltype(first(dimcolumns(dom)))
-
-# Why do we need both of these?
-GeoStatsBase.coordinates!(buf::AbstractVector, dom::DimDomain, i::Int) = 
-    buf[i] = SA[map(c -> c[i], dimcolumns(dom))...]
-GeoStatsBase.coordinates!(buf::MArray, dom::DimDomain, i::Int) =
-    buf .= map(c -> c[i], dimcolumns(dom))
+GeoStatsBase.values(A::AbstractDimArray) = parent(A)
 
 
 @testset "RegularGrid is detected where possible" begin
@@ -72,6 +91,10 @@ GeoStatsBase.coordinates!(buf::MArray, dom::DimDomain, i::Int) =
     plot(sol)
 end
 
+
+
+#########################################################################
+# Tests
 
 @testset "DimDomain is used otherwise" begin
 
@@ -102,12 +125,11 @@ end
 end
 
 
-
-# Also be good to test something non-randomised
-
+# TODO: test more things
 
 
 
+#####################################################################################
 
 
 #= Discussion point: the domain is nearly identical to the table: 
