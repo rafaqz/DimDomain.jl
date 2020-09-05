@@ -1,6 +1,6 @@
 
-using DimensionalData, GeoStatsBase, GeoStats, Plots, BenchmarkTools
-      DirectGaussianSimulation, Test, StaticArrays, LinearAlgebra, 
+using DimensionalData, GeoStatsBase, GeoStats, Plots, BenchmarkTools,
+      DirectGaussianSimulation, Test, StaticArrays, LinearAlgebra
 
 using DimensionalData: DimColumn
 
@@ -17,8 +17,7 @@ dimcolumns(dom::DimDomain) = dom.dimcolumns
 # This syntax should be fixed in DD for DimColumn
 DimensionalData.dims(dom::DimDomain) = map(DimensionalData.dim, dimcolumns(dom))  
 
-
-# Domain interface
+# Domain interface for DimDomain
 
 GeoStatsBase.nelms(dom::DimDomain) = length(first(dimcolumns(dom)))
 GeoStatsBase.ncoords(dom::DimDomain) = length(dimcolumns(dom))
@@ -54,7 +53,7 @@ GeoStatsBase.domain(dims::Tuple{Vararg{<:Dimension}}) = begin
         # RegularGrid could just accept AbstractRange?
         RegularGrid(lengths, origins, steps)
 
-    # Otherwise, generate the irregular domain from the index
+    # Otherwise, generate a DimDomain from the dimensions
     else 
         dimcolumns = map(d -> DimColumn(d, dims), dims)
         DimDomain(dimcolumns) 
@@ -72,12 +71,18 @@ GeoStatsBase.domain(A::AbstractDimArray) = GeoStatsBase.domain(dims(A))
 GeoStatsBase.values(A::AbstractDimArray) = parent(A)
 
 
+
+
+#########################################################################
+# Tests
+
+
 @testset "RegularGrid is detected where possible" begin
     # Define a regular index DimArray
     da_r = DimArray(rand(20, 30), (X(LinRange(-19.0, 19.0, 20)), Y(LinRange(3.0, 90.0, 30))))
 
     # Get the domain from it
-    rg = getdomain(da_r)
+    rg = GeoStatsBase.domain(da_r)
 
     # It's a RegularGrid domain
     @test rg isa RegularGrid
@@ -85,24 +90,20 @@ GeoStatsBase.values(A::AbstractDimArray) = parent(A)
     # Use it for something
     P = SimulationProblem(rg, :Z => Float64, 2)
     S = DirectGaussSim(:Z=>(variogram=GaussianVariogram(range=30.0),))
-    sol_rg2 = solve(P, S)
+    sol = solve(P, S)
 
     # @btime 17.760 ms (266 allocations: 11.06 MiB)
     plot(sol)
 end
 
 
-
-#########################################################################
-# Tests
-
-@testset "DimDomain is used otherwise" begin
+@testset "DimDomain is used if dims are irregular" begin
 
     # Define an identical but "Irregular" DimArray (the default for a vector index 
     da_i = DimArray(zeros(20, 30), (X([-19.0:2.0:19.0...]), Y([3.0:3.0:90.0...])))
 
     # Get the domain from it
-    D = getdomain(da_i)
+    D = GeoStatsBase.domain(da_i)
     # It returns a DimDomain
     @test D isa DimDomain
 
@@ -116,7 +117,7 @@ end
     # Run the same problem, now with the 
     P = SimulationProblem(D, :Z => Float64, 2)
     S  = DirectGaussSim(:Z=>(variogram=GaussianVariogram(range=30.0),))
-    sol_D = solve(P, S)
+    sol = solve(P, S)
     # @btime 19.930 ms (265 allocations: 11.06 MiB) 
     # - a little slower but we are indexing into a vector
     
