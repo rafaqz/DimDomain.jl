@@ -4,7 +4,7 @@
 using DimensionalData, GeoStatsBase, GeoStats, Plots, BenchmarkTools,
       DirectGaussianSimulation, Test, StaticArrays, LinearAlgebra, KrigingEstimators
 
-using DimensionalData: DimColumn
+using DimensionalData: DimColumn, formatdims, name
 
 
 """
@@ -28,7 +28,7 @@ GeoStatsBase.coordtype(dom::DimDomain) = eltype(first(dimcolumns(dom)))
 # Why do we need both of these methods?
 GeoStatsBase.coordinates!(buf::AbstractVector, dom::DimDomain, i::Int) = 
     buf[i] = SA[map(c -> c[i], dimcolumns(dom))...]
-GeoStatsBase.coordinates!(buf::MArray, dom::DimDomain, i::Int) =
+GeoStatsBase.coordinates!(buf::Union{SubArray,MArray}, dom::DimDomain, i::Int) =
     buf .= map(c -> c[i], dimcolumns(dom))
 
 
@@ -41,7 +41,7 @@ GeoStatsBase.coordinates!(buf::MArray, dom::DimDomain, i::Int) =
 Get the domain from a tuple of Dimension
 """
 GeoStatsBase.domain(dims::Tuple{Vararg{<:Dimension}}) = begin
-# Here we check if this these dimensions are all regular
+    # Here we check if this these dimensions are all regular
     isregular = map(dims) do d
         mode(d) isa Sampled && span(d) isa Regular
     end
@@ -57,7 +57,8 @@ GeoStatsBase.domain(dims::Tuple{Vararg{<:Dimension}}) = begin
     # Otherwise, generate a DimDomain from the dimensions
     else 
         dimcolumns = map(d -> DimColumn(d, dims), dims)
-        DimDomain(dimcolumns) end
+        DimDomain(dimcolumns) 
+    end
 end
 GeoStatsBase.domain(x::Union{AbstractDimArray,AbstractDimDataset}) = 
     GeoStatsBase.domain(dims(A))
@@ -89,8 +90,7 @@ interpolate(da::AbstractDimArray, solver::AbstractSolver; dims=dims(da)) = begin
     problem = EstimationProblem(data, domain(dims), key, mapper=CopyMapper())
     sol = solve(problem, solver)
     newA = reshape(sol[key][:mean], map(length, dims))
-    newdims = formatdims(newA, dims)
-    rebuild(da, newA, newdims)
+    rebuild(da, newA, formatdims(newA, dims))
 end
 interpolate(ds::AbstractDimDataset, solver::AbstractSolver; dims=dims(ds)) =
     map(da -> interpolate(da, solver; dims=dims), ds)
@@ -112,7 +112,7 @@ interpolate(ds::AbstractDimDataset, solver::AbstractSolver; dims=dims(ds)) =
 
     # Use it for something
     P = SimulationProblem(rg, :Z => Float64, 2)
-    S = DirectGaussSim(:Z=>(variogram=GaussianVariogram(range=30.0),))
+    S = DirectGaussSim(:Z => (variogram=GaussianVariogram(range=30.0),)) 
     sol = solve(P, S)
 
     # @btime 17.760 ms (266 allocations: 11.06 MiB)
@@ -129,7 +129,7 @@ end
     # It returns a DimDomain
     @test D isa DimDomain
 
-    # Check the geostatsbase interface works
+    # Check the GeoStatsBase interface works
     @test GeoStatsBase.nelms(D) == 20 * 30
     @test GeoStatsBase.ncoords(D) == 2
     @test GeoStatsBase.coordtype(D) == Float64
@@ -170,23 +170,49 @@ end
     for i in 1:4:20, j in 1:5:20
         A[i, j] = missing
     end
-    # Wrap as a DimArray
-    da = DimArray(A, (X(LinRange(-19.0, 19.0, 20)), Y(LinRange(3.0, 90.0, 30))), :data)
+    A
 
-    # interpolate the array with tne Kriging solver
-    result = interpolate(da, Kriging()) 
+    @testset "Regular" begin
+        # Wrap as a DimArray
+        da = DimArray(A, (X(LinRange(-19.0, 19.0, 20)), Y(LinRange(3.0, 90.0, 30))), :data)
 
-    @test result isa DimArray
-    @test dims(result) == dims(da)
-    @test size(result) == size(da)
-    # We have intepolated the missing values
-    @test any(ismissing, da) == true
-    @test any(ismissing, result) == false
+        # interpolate the array missing values with tne Kriging solver
+        kr = Kriging(:data => (degree=1, variogram=SphericalVariogram(range=20.)))
+        result = interpolate(da, kr) 
 
-    # `heatmap` the interpolated array
-    heatmap(result)
-    # Compare the original
-    heatmap(da)
+
+        @test result isa DimArray
+        @test dims(result) == dims(da)
+        @test size(result) == size(da)
+        # We have intepolated the missing values
+        @test any(ismissing, da) == true
+        @test any(ismissing, result) == false
+
+        # `heatmap` the interpolated array
+        heatmap(da)
+        heatmap(result)
+        # Compare the original
+    end
+
+    @testset "Irregular" begin
+        # Wrap as a DimArray
+        da = DimArray(A, (X([-19.0:2.0:19.0...]), Y([3.0:3.0:90.0...])), :data)
+
+        # interpolate the array with tne Kriging solver
+        kr = Kriging(:data => (degree=1, variogram=SphericalVariogram(range=20.)))
+
+        @test result isa DimArray
+        @test dims(result) == dims(da)
+        @test size(result) == size(da)
+        # We have intepolated the missing values
+        @test any(ismissing, da) == true
+        @test any(ismissing, result) == false
+
+        # `heatmap` the interpolated array
+        heatmap(result)
+        # Compare the original
+        heatmap(da)
+    end
 end
 
 @testset "interpolate to a larger array" begin
@@ -194,10 +220,11 @@ end
     A = rand(20, 30) 
     # Wrap as a DimArray
     da = DimArray(A, (X(LinRange(-19.0, 19.0, 20)), Y(LinRange(3.0, 90.0, 30))), :data)
-    newdims = (X(LinRange(-19.0, 19.0, 45))), Y(LinRange(3.0, 90.0, 53))
+    newdims = (X(LinRange(-19.0, 19.0, 75))), Y(LinRange(3.0, 90.0, 73))
+    kr = Kriging(:data => (degree=1, variogram=SphericalVariogram(range=20.)))
 
     # interpolate the array with tne Kriging solver and newdims for the domain
-    result = interpolate(da, Kriging(); dims=newdims) 
+    result = interpolate(da, kr; dims=newdims) 
 
     # The return value is a DimArray
     @test result isa DimArray
@@ -210,38 +237,61 @@ end
     @test index(result) == index(newdims)
 
     # `heatmap` the interpolated array
-    heatmap(result)
-    # And compare the original
     heatmap(da)
+    savefig("original.png")
+    heatmap(result)
+    savefig("interpolated.png")
+    # And compare the original
 end
 
 @testset "interpolate all arrays in dataset to larger arrays" begin
     # Define a regular index DimArray
-    layers = (a=rand(20, 30), b=rand(Float32, 20, 30))
+    layerz = (a=rand(20, 30), b=rand(Float32, 20, 30))
     # Wrap as a DimArray
-    dimz = (X(LinRange(-19.0, 19.0, 20)), Y(LinRange(3.0, 90.0, 30)))
-    ds = DimDataset(layers, dimz)
-    newdims = (X(LinRange(-19.0, 19.0, 45))), Y(LinRange(3.0, 90.0, 53))
 
-    # interpolate the array with tne Kriging solver and newdims for the domain
-    result = interpolate(ds, Kriging(); dims=newdims) 
 
-    # The return value is a DimArray
-    @test result isa DimDataset
-    # `dims` for the returned array wont be identical to `newdims` as they are formatted 
-    # to match the array. But theyre basically the same type:
-    @test dims(result) isa Tuple{<:X{<:LinRange,<:Sampled,Nothing},<:Y{<:LinRange,<:Sampled,Nothing}}
-    # Array is the right size
-    @test size(first(values(result))) == map(length, newdims)
-    # Dims have the same index as newdims
-    @test index(result) == index(newdims)
+    @testset "Regular" begin
+        dimz = (X(LinRange(-19.0, 19.0, 20)), Y(LinRange(3.0, 90.0, 30)))
+        ds = DimDataset(layerz, dimz)
+        newdims = (X(LinRange(-19.0, 19.0, 45))), Y(LinRange(3.0, 90.0, 53))
+        # interpolate the array with tne Kriging solver and newdims for the domain
+        result = interpolate(ds, Kriging(); dims=newdims) 
 
-    # `heatmap` the interpolated arrays
-    heatmap(result[:a])
-    heatmap(result[:b])
+        @test result isa DimDataset
+        # `dims` for the returned array wont be identical to `newdims` as they are formatted 
+        # to match the array. But theyre basically the same type:
+        @test dims(result) isa Tuple{<:X{<:LinRange,<:Sampled,Nothing},<:Y{<:LinRange,<:Sampled,Nothing}}
+        # Array is the right size
+        @test size(first(values(result))) == map(length, newdims)
+        # result dims have the same index as newdims
+        @test index(result) == index(newdims)
+
+        # `heatmap` the interpolated arrays
+        heatmap(result[:a])
+        heatmap(result[:b])
+    end
+
+    @testset "Irregular" begin
+        dimz = X([-19.0:2.0:19.0...]), Y([3.0:3.0:90.0...])
+        ds = DimDataset(layerz, dimz)
+        newdims = X([-19.0:1.0:19.0...]), Y([3.0:2.0:90.0...])
+        # interpolate the array with tne Kriging solver and newdims for the domain
+        result = interpolate(ds, Kriging(); dims=newdims) 
+
+        @test result isa DimDataset
+        # `dims` for the returned array wont be identical to `newdims` as they are formatted 
+        # to match the array. But theyre basically the same type:
+        @test dims(result) isa Tuple{<:X{<:Vector,<:Sampled,Nothing},<:Y{<:Vector,<:Sampled,Nothing}}
+        # Array is the right size
+        @test size(first(values(result))) == map(length, newdims)
+        # result dims have the same index as newdims
+        @test index(result) == index(newdims)
+
+        # `heatmap` the interpolated arrays
+        heatmap(result[:a])
+        heatmap(result[:b])
+    end
 end
-
-
 
 # TODO: test more things
 
