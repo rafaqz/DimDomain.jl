@@ -116,7 +116,6 @@ end
 
 
 @testset "DimDomain is used if dims are irregular" begin
-
     # Define an identical but "Irregular" DimArray (the default for a vector index)
     da_i = DimArray(zeros(20, 30), (X([-19.0:2.0:19.0...]), Y([3.0:3.0:90.0...])))
 
@@ -144,8 +143,6 @@ end
 
 
 @testset "We can just use any `AbstractDimArray` directly as the domain" begin
-
-    # Define an identical but "Irregular" DimArray (the default for a vector index 
     da = DimArray(zeros(20, 30), (X([-19.0:2.0:19.0...]), Y([3.0:3.0:90.0...])))
 
     # Check the geostatsbase interface works
@@ -162,7 +159,7 @@ end
 end
 
 @testset "interpolate current array size to remove missing" begin
-    # Define a regular index DimArray
+    # Define a regular index DimArray that can hold `missing`
     A = convert(Array{Union{Float64,Missing}}, rand(20, 30)) 
     # Make some values missing
     for i in 1:4:20, j in 1:5:20
@@ -173,25 +170,37 @@ end
 
     # interpolate the array with tne Kriging solver
     result = interpolate(da, Kriging()) 
+
     @test result isa DimArray
+    # We have intepolated the missing values
+    @test any(ismissing, da) == true
+    @test any(ismissing, result) == false
 
     # `heatmap` the interpolated array
     heatmap(result)
+    # Compare the original
+    heatmap(da)
 end
 
 @testset "interpolate to a larger array" begin
     # Define a regular index DimArray
-    A = convert(Array{Union{Float64,Missing}}, rand(20, 30)) 
+    A = rand(20, 30) 
     # Wrap as a DimArray
     da = DimArray(A, (X(LinRange(-19.0, 19.0, 20)), Y(LinRange(3.0, 90.0, 30))), :data)
-    newdims = (X(LinRange(-19.0, 19.0, 45), Sampled()), Y(LinRange(3.0, 90.0, 53), Sampled()))
+    newdims = (X(LinRange(-19.0, 19.0, 45))), Y(LinRange(3.0, 90.0, 53))
 
+    # interpolate the array with tne Kriging solver and newdims for the domain
     result = interpolate(da, Kriging(); dims=newdims) 
+
     # The return value is a DimArray
     @test result isa DimArray
     # `dims` for the returned array wont be identical to `newdims` as they are formatted 
     # to match the array. But theyre basically the same type:
     @test dims(result) isa Tuple{<:X{<:LinRange,<:Sampled,Nothing},<:Y{<:LinRange,<:Sampled,Nothing}}
+    # Array is the right size
+    @test size(result) == map(length, newdims)
+    # Dims have the same index as newdims
+    @test index(result) == index(newdims)
 
     # `heatmap` the interpolated array
     heatmap(result)
