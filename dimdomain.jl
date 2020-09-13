@@ -1,6 +1,8 @@
 
+# Need to use `] add DimensionalData#dataset` to get the latest things used here
+
 using DimensionalData, GeoStatsBase, GeoStats, Plots, BenchmarkTools,
-      DirectGaussianSimulation, Test, StaticArrays, LinearAlgebra
+      DirectGaussianSimulation, Test, StaticArrays, LinearAlgebra, KrigingEstimators
 
 using DimensionalData: DimColumn
 
@@ -55,10 +57,10 @@ GeoStatsBase.domain(dims::Tuple{Vararg{<:Dimension}}) = begin
     # Otherwise, generate a DimDomain from the dimensions
     else 
         dimcolumns = map(d -> DimColumn(d, dims), dims)
-        DimDomain(dimcolumns) 
-    end
+        DimDomain(dimcolumns) end
 end
-
+GeoStatsBase.domain(x::Union{AbstractDimArray,AbstractDimDataset}) = 
+    GeoStatsBase.domain(dims(A))
 
 """
     domain(A::AbstractDimArray)
@@ -72,10 +74,21 @@ GeoStatsBase.domain(A::AbstractDimArray) = GeoStatsBase.domain(dims(A))
 GeoStatsBase.values(A::AbstractDimArray) = DimTable(A)
 
 
-# TODO: implement DimTable for GeoStack
-# This would give us multi-layered data object
-# the question is wether to put a simplified parent `DimStack` type in DD
-# So all of this doesn't need a GD dependency, just DD
+"""
+    interpolate(da::AbstractDimArray, solver::AbstractSolver; dims=dims(da))
+
+Either interpolate to fill missings in the current array, 
+or interpolate to a new domain specified by `dims`.
+"""
+interpolate(da::AbstractDimArray, solver::AbstractSolver; dims=dims(da)) = begin
+    key = name(da)
+    data = SpatialData(domain(da), DimTable(da)) 
+    problem = EstimationProblem(data, domain(dims), key, mapper=CopyMapper())
+    sol = solve(problem, solver)
+    newA = reshape(sol[key][:mean], map(length, dims))
+    newdims = formatdims(newA, dims)
+    rebuild(da, newA, newdims)
+end
 
 
 #########################################################################
@@ -136,6 +149,7 @@ end
     da = DimArray(zeros(20, 30), (X([-19.0:2.0:19.0...]), Y([3.0:3.0:90.0...])))
 
     # Check the geostatsbase interface works
+    @test GeoStatsBase.domain(da) isa DimDomain
     @test GeoStatsBase.nelms(da) == 20 * 30
     @test GeoStatsBase.ncoords(da) == 2
     @test GeoStatsBase.coordtype(da) == Float64
@@ -145,6 +159,44 @@ end
     P = SimulationProblem(da, :Z => Float64, 2)
     S  = DirectGaussSim(:Z=>(variogram=GaussianVariogram(range=30.0),))
     sol = solve(P, S)
+end
+
+@testset "interpolate in place" begin
+    # Define a regular index DimArray
+    A = convert(Array{Union{Float64,Missing}}, rand(20, 30)) 
+    # Make some values missing
+    for i in 1:4:20, j in 1:5:20
+        A[i, j] = missing
+    end
+    # Wrap as a DimArray
+    da = DimArray(A, (X(LinRange(-19.0, 19.0, 20)), Y(LinRange(3.0, 90.0, 30))), :data)
+
+    # interpolate the array with tne Kriging solver
+    result = interpolate(da, Kriging()) 
+    @test result isa DimArray
+
+    # `heatmap` the interpolated array
+    heatmap(result)
+end
+
+@testset "interpolate to a larger array" begin
+    # Define a regular index DimArray
+    A = convert(Array{Union{Float64,Missing}}, rand(20, 30)) 
+    # Wrap as a DimArray
+    da = DimArray(A, (X(LinRange(-19.0, 19.0, 20)), Y(LinRange(3.0, 90.0, 30))), :data)
+    newdims = (X(LinRange(-19.0, 19.0, 45), Sampled()), Y(LinRange(3.0, 90.0, 53), Sampled()))
+
+    result = interpolate(da, Kriging(); dims=newdims) 
+    # The return value is a DimArray
+    @test result isa DimArray
+    # `dims` for the returned array wont be identical to `newdims` as they are formatted 
+    # to match the array. But theyre basically the same type:
+    @test dims(result) isa Tuple{<:X{<:LinRange,<:Sampled,Nothing},<:Y{<:LinRange,<:Sampled,Nothing}}
+
+    # `heatmap` the interpolated array
+    heatmap(result)
+    # And compare the original
+    heatmap(da)
 end
 
 
