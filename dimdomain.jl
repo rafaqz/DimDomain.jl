@@ -76,9 +76,12 @@ GeoStatsBase.values(A::AbstractDimArray) = DimTable(A)
 
 """
     interpolate(da::AbstractDimArray, solver::AbstractSolver; dims=dims(da))
+    interpolate(ds::AbstractDimDataset, solver::AbstractSolver; dims=dims(ds))
 
 Either interpolate to fill missings in the current array, 
 or interpolate to a new domain specified by `dims`.
+
+If the passed in object is a `AbstractDimDataset`, all layers will be interpolated.
 """
 interpolate(da::AbstractDimArray, solver::AbstractSolver; dims=dims(da)) = begin
     key = name(da)
@@ -89,6 +92,8 @@ interpolate(da::AbstractDimArray, solver::AbstractSolver; dims=dims(da)) = begin
     newdims = formatdims(newA, dims)
     rebuild(da, newA, newdims)
 end
+interpolate(ds::AbstractDimDataset, solver::AbstractSolver; dims=dims(ds)) =
+    map(da -> interpolate(da, solver; dims=dims), ds)
 
 
 #########################################################################
@@ -208,6 +213,32 @@ end
     heatmap(result)
     # And compare the original
     heatmap(da)
+end
+
+@testset "interpolate all arrays in dataset to larger arrays" begin
+    # Define a regular index DimArray
+    layers = (a=rand(20, 30), b=rand(Float32, 20, 30))
+    # Wrap as a DimArray
+    dimz = (X(LinRange(-19.0, 19.0, 20)), Y(LinRange(3.0, 90.0, 30)))
+    ds = DimDataset(layers, dimz)
+    newdims = (X(LinRange(-19.0, 19.0, 45))), Y(LinRange(3.0, 90.0, 53))
+
+    # interpolate the array with tne Kriging solver and newdims for the domain
+    result = interpolate(ds, Kriging(); dims=newdims) 
+
+    # The return value is a DimArray
+    @test result isa DimDataset
+    # `dims` for the returned array wont be identical to `newdims` as they are formatted 
+    # to match the array. But theyre basically the same type:
+    @test dims(result) isa Tuple{<:X{<:LinRange,<:Sampled,Nothing},<:Y{<:LinRange,<:Sampled,Nothing}}
+    # Array is the right size
+    @test size(first(values(result))) == map(length, newdims)
+    # Dims have the same index as newdims
+    @test index(result) == index(newdims)
+
+    # `heatmap` the interpolated arrays
+    heatmap(result[:a])
+    heatmap(result[:b])
 end
 
 
