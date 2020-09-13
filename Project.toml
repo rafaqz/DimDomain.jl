@@ -1,0 +1,6 @@
+[deps]
+DimensionalData = "0703355e-b756-11e9-17c0-8b28908087d0"
+GeoStats = "dcc97b0b-8ce5-5539-9008-bb190f959ef6"
+GeoStatsBase = "323cb8eb-fbf6-51c0-afd0-f8fba70507b2"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
