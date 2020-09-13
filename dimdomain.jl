@@ -161,7 +161,7 @@ end
     sol = solve(P, S)
 end
 
-@testset "interpolate in place" begin
+@testset "interpolate current array size to remove missing" begin
     # Define a regular index DimArray
     A = convert(Array{Union{Float64,Missing}}, rand(20, 30)) 
     # Make some values missing
