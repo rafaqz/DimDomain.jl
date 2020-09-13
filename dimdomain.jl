@@ -172,6 +172,8 @@ end
     result = interpolate(da, Kriging()) 
 
     @test result isa DimArray
+    @test dims(result) == dims(da)
+    @test size(result) == size(da)
     # We have intepolated the missing values
     @test any(ismissing, da) == true
     @test any(ismissing, result) == false
